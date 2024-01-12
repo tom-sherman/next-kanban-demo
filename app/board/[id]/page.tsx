@@ -5,6 +5,7 @@ import {
   createColumn,
   getBoard,
   updateBoardName,
+  updateColumnName,
   upsertItem,
 } from "@/app/_lib/db";
 import { notFound, redirect } from "next/navigation";
@@ -23,24 +24,29 @@ export default async function Board({ params }: { params: { id: string } }) {
 
   const board = await getBoard(id, userId);
   if (!board) notFound();
+  const boardPath = `/board/${board.id}`;
 
   async function updateBoardNameAction(formData: FormData) {
     "use server";
     let name = String(formData.get("name") || "");
     invariant(name, "Missing name");
     await updateBoardName(board!.id, name, userId!);
-    revalidatePath(`/board/${board!.id}`, "page");
-    revalidatePath("/home", "page");
+    revalidatePath(boardPath);
+    revalidatePath("/home");
   }
 
   async function moveItemAction(item: ItemMutation) {
     "use server";
     await upsertItem(item, userId!, board!.id);
+    revalidatePath(boardPath);
   }
 
-  async function renameColumnAction() {
+  async function renameColumnAction(formData: FormData) {
     "use server";
-    throw new Error("Not implemented");
+    const name = formData.get("name");
+    invariant(name, "Missing name");
+    updateColumnName(String(formData.get("id") ?? ""), String(name), userId!);
+    revalidatePath(boardPath);
   }
 
   async function newColumnAction(formData: FormData) {
@@ -49,6 +55,7 @@ export default async function Board({ params }: { params: { id: string } }) {
     invariant(name, "Missing name");
 
     await createColumn(board!.id, name, userId!);
+    revalidatePath(boardPath);
   }
 
   let itemsByColumnId = getItemsByColumnId(board.items);

@@ -194,3 +194,14 @@ export async function createColumn(
     },
   });
 }
+
+export async function updateColumnName(
+  id: string,
+  name: string,
+  accountId: string
+): Promise<void> {
+  await prisma.column.update({
+    where: { id, Board: { accountId } },
+    data: { name },
+  });
+}
