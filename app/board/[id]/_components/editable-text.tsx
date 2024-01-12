@@ -38,10 +38,10 @@ export function EditableText({
 
   return edit ? (
     <form
-      action={action}
-      onSubmit={() => {
-        startTransition(() => {
-          setOptimisticValue(inputRef.current!.value);
+      action={(formData) => {
+        startTransition(async () => {
+          setOptimisticValue(formData.get(fieldName) as string);
+          await action(formData);
         });
         flushSync(() => {
           setEdit(false);
