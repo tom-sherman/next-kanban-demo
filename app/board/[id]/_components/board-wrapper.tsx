@@ -1,6 +1,12 @@
 "use client";
 
-import { ReactNode, useRef } from "react";
+import { ReactNode, RefObject, useRef, createContext } from "react";
+
+export const BoardContainerRefContext = createContext<
+  RefObject<HTMLDivElement>
+>({
+  current: null,
+});
 
 export function BoardWrapper({
   children,
@@ -16,7 +22,9 @@ export function BoardWrapper({
       ref={scrollContainerRef}
       style={{ backgroundColor: boardColor }}
     >
-      {children}
+      <BoardContainerRefContext.Provider value={scrollContainerRef}>
+        {children}
+      </BoardContainerRefContext.Provider>
     </div>
   );
 }

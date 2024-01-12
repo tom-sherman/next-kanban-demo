@@ -10,7 +10,7 @@ import {
 import { flushSync } from "react-dom";
 
 type EditableTextProps = {
-  children: ReactNode;
+  children?: ReactNode;
   fieldName: string;
   value: string;
   inputClassName: string;

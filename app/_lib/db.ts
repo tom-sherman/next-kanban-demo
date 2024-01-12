@@ -1,6 +1,6 @@
 import "server-only";
-export type { Account, Board } from "@prisma/client";
-import { Account, Board, Item, PrismaClient } from "@prisma/client";
+export type { Account, Board, Column, Item } from "@prisma/client";
+import { Account, Board, Item, Column, PrismaClient } from "@prisma/client";
 import { experimental_taintUniqueValue as taintUniqueValue } from "react";
 import invariant from "tiny-invariant";
 import crypto from "node:crypto";
@@ -116,6 +116,7 @@ export async function deleteBoard(
 
 export type BoardWithItems = Board & {
   items: Item[];
+  columns: Column[];
 };
 
 export async function getBoard(
@@ -142,5 +143,54 @@ export async function updateBoardName(
   await prisma.board.update({
     where: { id: boardId, accountId: accountId },
     data: { name },
+  });
+}
+
+export type ItemMutation = {
+  id: string;
+  columnId: string;
+  order: number;
+  title: string;
+};
+
+export async function upsertItem(
+  mutation: ItemMutation,
+  accountId: string,
+  boardId: number
+): Promise<void> {
+  await prisma.item.upsert({
+    where: {
+      id: mutation.id,
+      Board: {
+        accountId,
+      },
+    },
+    create: {
+      ...mutation,
+      boardId,
+    },
+    update: mutation,
+  });
+}
+
+export async function createColumn(
+  boardId: number,
+  name: string,
+  accountId: string
+): Promise<void> {
+  const columnCount = await prisma.column.count({
+    where: { boardId, Board: { accountId } },
+  });
+
+  // TODO: Database should do this
+  const id = crypto.randomBytes(16).toString("hex");
+
+  await prisma.column.create({
+    data: {
+      id,
+      boardId,
+      name,
+      order: columnCount + 1,
+    },
   });
 }

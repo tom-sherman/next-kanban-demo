@@ -1,10 +1,18 @@
 import { getCurrentUserId } from "@/app/_lib/auth";
-import { getBoard, updateBoardName } from "@/app/_lib/db";
+import {
+  Item,
+  ItemMutation,
+  createColumn,
+  getBoard,
+  updateBoardName,
+  upsertItem,
+} from "@/app/_lib/db";
 import { notFound, redirect } from "next/navigation";
 import { BoardWrapper } from "./_components/board-wrapper";
 import { EditableText } from "./_components/editable-text";
 import invariant from "tiny-invariant";
 import { unstable_noStore as noStore, revalidatePath } from "next/cache";
+import { Columns } from "./_components/column";
 
 export default async function Board({ params }: { params: { id: string } }) {
   noStore();
@@ -25,6 +33,32 @@ export default async function Board({ params }: { params: { id: string } }) {
     revalidatePath("/home", "page");
   }
 
+  async function moveItemAction(item: ItemMutation) {
+    "use server";
+    await upsertItem(item, userId!, board!.id);
+  }
+
+  async function renameColumnAction() {
+    "use server";
+    throw new Error("Not implemented");
+  }
+
+  async function newColumnAction(formData: FormData) {
+    "use server";
+    const name = String(formData.get("name") || "");
+    invariant(name, "Missing name");
+
+    await createColumn(board!.id, name, userId!);
+  }
+
+  let itemsByColumnId = getItemsByColumnId(board.items);
+  const columns = board.columns.map((col) => {
+    return {
+      ...col,
+      items: itemsByColumnId.get(col.id) ?? [],
+    };
+  });
+
   return (
     <BoardWrapper boardColor={board.color}>
       <h1>
@@ -36,32 +70,36 @@ export default async function Board({ params }: { params: { id: string } }) {
           buttonLabel={`Edit board "${board.name}" name`}
           inputLabel="Edit board name"
           action={updateBoardNameAction}
-        >
-          <input type="hidden" name="id" value={board.id} />
-        </EditableText>
+        />
       </h1>
 
       <div className="flex flex-grow min-h-0 h-full items-start gap-4 px-8 pb-4">
-        {/* {[...columns.values()].map((col) => {
-          return (
-            <Column
-              key={col.id}
-              name={col.name}
-              columnId={col.id}
-              items={col.items}
-            />
-          );
-        })}
-
-        <NewColumn
+        <Columns
+          columns={columns}
+          moveItemAction={moveItemAction}
+          renameColumnAction={renameColumnAction}
+          newColumnAction={newColumnAction}
           boardId={board.id}
-          onAdd={scrollRight}
-          editInitially={board.columns.length === 0}
-        /> */}
+        />
 
         {/* trolling you to add some extra margin to the right of the container with a whole dang div */}
         <div data-lol className="w-8 h-1 flex-shrink-0" />
       </div>
     </BoardWrapper>
   );
+}
+
+function getItemsByColumnId(items: Item[]) {
+  const map = new Map<string, Item[]>();
+
+  for (const item of items) {
+    let columnItems = map.get(item.columnId);
+    if (!columnItems) {
+      columnItems = [];
+      map.set(item.columnId, columnItems);
+    }
+    columnItems.push(item);
+  }
+
+  return map;
 }
