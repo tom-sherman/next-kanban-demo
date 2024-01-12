@@ -1,6 +1,6 @@
 import "server-only";
 export type { Account, Board } from "@prisma/client";
-import { Account, Board, PrismaClient } from "@prisma/client";
+import { Account, Board, Item, PrismaClient } from "@prisma/client";
 import { experimental_taintUniqueValue as taintUniqueValue } from "react";
 import invariant from "tiny-invariant";
 import crypto from "node:crypto";
@@ -111,5 +111,36 @@ export async function deleteBoard(
 ): Promise<void> {
   await prisma.board.delete({
     where: { id: boardId, accountId },
+  });
+}
+
+export type BoardWithItems = Board & {
+  items: Item[];
+};
+
+export async function getBoard(
+  boardId: number,
+  accountId: string
+): Promise<BoardWithItems | null> {
+  return prisma.board.findUnique({
+    where: {
+      id: boardId,
+      accountId: accountId,
+    },
+    include: {
+      items: true,
+      columns: { orderBy: { order: "asc" } },
+    },
+  });
+}
+
+export async function updateBoardName(
+  boardId: number,
+  name: string,
+  accountId: string
+): Promise<void> {
+  await prisma.board.update({
+    where: { id: boardId, accountId: accountId },
+    data: { name },
   });
 }
