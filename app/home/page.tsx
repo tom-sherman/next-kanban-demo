@@ -19,8 +19,9 @@ export default async function Home() {
     redirect(`/board/${board.id}`);
   }
 
-  async function removeBoardAction(boardId: number) {
+  async function removeBoardAction(formData: FormData) {
     "use server";
+    const boardId = Number(formData.get("id") || "");
     await deleteBoard(boardId, id!);
     revalidatePath("/home");
   }
