@@ -3,7 +3,7 @@
 import { Icon } from "@/app/_components/icons";
 import { Board } from "@/app/_lib/db";
 import Link from "next/link";
-import { startTransition, useOptimistic } from "react";
+import { useOptimistic, useTransition } from "react";
 
 interface BoardsProps {
   boards: Board[];
@@ -11,6 +11,7 @@ interface BoardsProps {
 }
 
 export function Boards({ boards, removeBoardAction }: BoardsProps) {
+  const [_pending, startTransition] = useTransition();
   const [optimisticBoards, removeBoard] = useOptimistic(boards, (boards, id) =>
     boards.filter((b) => b.id !== id)
   );
@@ -31,10 +32,9 @@ export function Boards({ boards, removeBoardAction }: BoardsProps) {
               action={removeBoardAction}
               onSubmit={(e) => {
                 e.preventDefault();
-                // @ts-expect-error Async actions aren't supported but i'm pretty sure that's what we want here
-                startTransition(() => {
+                startTransition(async () => {
                   removeBoard(board.id);
-                  return removeBoardAction(new FormData(e.currentTarget));
+                  await removeBoardAction(new FormData(e.currentTarget));
                 });
               }}
             >
