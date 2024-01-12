@@ -5,10 +5,10 @@ import { Board } from "@/app/_lib/db";
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 
-interface BoardsProps {
+type BoardsProps = {
   boards: Board[];
   removeBoardAction: (data: FormData) => Promise<void>;
-}
+};
 
 export function Boards({ boards, removeBoardAction }: BoardsProps) {
   const [_pending, startTransition] = useTransition();
