@@ -30,29 +30,19 @@ export function EditableText({
   buttonLabel,
   action,
 }: EditableTextProps) {
-  const [pending, startTransition] = useTransition();
+  const [_pending, startTransition] = useTransition();
   const [edit, setEdit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [optimisticValue, setOptimisticValue] = useOptimistic(value);
 
-  function mutate(formData: FormData) {
-    startTransition(async () => {
-      setOptimisticValue(String(formData.get(fieldName)!));
-      if (
-        inputRef.current?.value !== optimisticValue &&
-        inputRef.current?.value.trim() !== ""
-      ) {
-        await action(formData);
-      }
-    });
-  }
-
   return edit ? (
     <form
       action={action}
-      onSubmit={(event) => {
-        mutate(new FormData(event.currentTarget));
+      onSubmit={() => {
+        startTransition(() => {
+          setOptimisticValue(inputRef.current!.value);
+        });
         flushSync(() => {
           setEdit(false);
         });
@@ -78,7 +68,13 @@ export function EditableText({
         }}
         onBlur={(event) => {
           setEdit(false);
-          mutate(new FormData(event.currentTarget.form!));
+          startTransition(async () => {
+            const newValue = inputRef.current!.value;
+            setOptimisticValue(newValue);
+            if (newValue !== optimisticValue && newValue.trim() !== "") {
+              await action(new FormData(event.currentTarget.form!));
+            }
+          });
         }}
       />
     </form>
