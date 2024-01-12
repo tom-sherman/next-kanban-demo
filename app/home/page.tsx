@@ -3,8 +3,8 @@ import { getCurrentUserId } from "../_lib/auth";
 import { createBoard, deleteBoard, getBoardsForUser } from "../_lib/db";
 import { Boards } from "./_components/boards";
 import { Label, LabeledInput } from "../_components/input";
-import { Button } from "../_components/button";
 import { unstable_noStore as noStore, revalidatePath } from "next/cache";
+import { CreateBoardButton } from "./_components/create-board-button";
 
 export default async function Home() {
   noStore();
@@ -46,7 +46,7 @@ export default async function Home() {
               className="bg-transparent"
             />
           </div>
-          <Button type="submit">Create</Button>
+          <CreateBoardButton />
         </div>
       </form>
       <Boards boards={boards} removeBoardAction={removeBoardAction} />
