@@ -63,7 +63,7 @@ function LoginButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" aria-disabled={pending}>
-      Sign in
+      {pending ? "Signing in..." : "Sign in"}
     </Button>
   );
 }
