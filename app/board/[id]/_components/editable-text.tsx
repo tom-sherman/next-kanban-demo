@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ReactNode,
-  useOptimistic,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { ReactNode, useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
 
 type EditableTextProps = {
@@ -34,13 +28,11 @@ export function EditableText({
   const [edit, setEdit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
 
   return edit ? (
     <form
       action={(formData) => {
         startTransition(async () => {
-          setOptimisticValue(formData.get(fieldName) as string);
           await action(formData);
         });
         flushSync(() => {
@@ -56,7 +48,7 @@ export function EditableText({
         type="text"
         aria-label={inputLabel}
         name={fieldName}
-        defaultValue={optimisticValue}
+        defaultValue={value}
         className={inputClassName}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -70,8 +62,7 @@ export function EditableText({
           setEdit(false);
           startTransition(async () => {
             const newValue = inputRef.current!.value;
-            setOptimisticValue(newValue);
-            if (newValue !== optimisticValue && newValue.trim() !== "") {
+            if (newValue !== value && newValue.trim() !== "") {
               await action(new FormData(event.currentTarget.form!));
             }
           });
@@ -91,7 +82,7 @@ export function EditableText({
       }}
       className={buttonClassName}
     >
-      {optimisticValue || <span className="text-slate-400 italic">Edit</span>}
+      {value || <span className="text-slate-400 italic">Edit</span>}
     </button>
   );
 }

@@ -72,7 +72,16 @@ export function Columns({
               await moveItemAction(item);
             });
           }}
-          renameColumnAction={renameColumnAction}
+          renameColumnAction={async (formData) => {
+            setOptimisticColumns(
+              optimisticColumns.map((c) =>
+                c.id === col.id
+                  ? { ...c, name: String(formData.get("name")) }
+                  : c
+              )
+            );
+            await renameColumnAction(formData);
+          }}
         />
       ))}
 

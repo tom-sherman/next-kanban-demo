@@ -14,6 +14,7 @@ import { EditableText } from "./_components/editable-text";
 import invariant from "tiny-invariant";
 import { unstable_noStore as noStore, revalidatePath } from "next/cache";
 import { Columns } from "./_components/column";
+import { BoardTitle } from "./_components/board-title";
 
 export default async function Board({ params }: { params: { id: string } }) {
   noStore();
@@ -69,14 +70,9 @@ export default async function Board({ params }: { params: { id: string } }) {
   return (
     <BoardWrapper boardColor={board.color}>
       <h1>
-        <EditableText
-          value={board.name}
-          fieldName="name"
-          inputClassName="mx-8 my-4 text-2xl font-medium border border-slate-400 rounded-lg py-1 px-2 text-black"
-          buttonClassName="mx-8 my-4 text-2xl font-medium block rounded-lg text-left border border-transparent py-1 px-2 text-slate-800"
-          buttonLabel={`Edit board "${board.name}" name`}
-          inputLabel="Edit board name"
-          action={updateBoardNameAction}
+        <BoardTitle
+          boardName={board.name}
+          updateBoardNameAction={updateBoardNameAction}
         />
       </h1>
 
