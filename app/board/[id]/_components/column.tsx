@@ -42,35 +42,17 @@ export function Columns({
   createCardAction,
   boardId,
 }: ColumnsProps) {
-  const [optimisticColumns, setOptimisticColumns] = useOptimistic(columns);
+  const [optimisticColumns, setOptimisticColumns] = useOptimistic(
+    columns,
+    reduceColumns
+  );
+
   const [, startTransition] = useTransition();
   console.log(optimisticColumns[0]?.items.map((i) => i.order));
 
   function moveItem(newItem: ItemMutation) {
     startTransition(async () => {
-      setOptimisticColumns((columns) => {
-        const previousColumn = columns.find((c) => c.id === newItem.columnId);
-        const newColumn = columns.find((c) => c.id === newItem.columnId);
-        invariant(newColumn, "missing new column");
-        invariant(previousColumn, "missing previous column");
-
-        return columns.map((column) =>
-          column.id === previousColumn?.id
-            ? {
-                ...column,
-                items: column.items.map((item) =>
-                  item.id === newItem.id
-                    ? {
-                        ...item,
-                        ...newItem,
-                        id: newItem.id ?? Math.random().toString(),
-                      }
-                    : item
-                ),
-              }
-            : column
-        );
-      });
+      setOptimisticColumns({ type: "move-item", newItem });
       await moveItemAction(newItem);
     });
   }
@@ -88,37 +70,21 @@ export function Columns({
           onAddInitialItem={(item) => moveItem(item)}
           createCardAction={async (formData) => {
             startTransition(async () => {
-              setOptimisticColumns((cols) =>
-                cols.map((c) =>
-                  c.id === col.id
-                    ? {
-                        ...c,
-                        items: [
-                          ...c.items,
-                          {
-                            id: Math.random().toString(),
-                            title: String(formData.get("title")),
-                            order: (c.items.at(-1)?.order ?? 0) + 1,
-                            content: null,
-                            columnId: c.id,
-                            boardId,
-                          },
-                        ],
-                      }
-                    : c
-                )
-              );
+              setOptimisticColumns({
+                type: "create-item",
+                boardId,
+                columnId: col.id,
+                title: String(formData.get("title")),
+              });
               await createCardAction(formData);
             });
           }}
           renameColumnAction={async (formData) => {
-            setOptimisticColumns(
-              optimisticColumns.map((c) =>
-                c.id === col.id
-                  ? { ...c, name: String(formData.get("name")) }
-                  : c
-              )
-            );
+            setOptimisticColumns({
+              type: "rename-column",
+              columnId: col.id,
+              name: String(formData.get("name")),
+            });
             await renameColumnAction(formData);
           }}
         />
@@ -128,16 +94,11 @@ export function Columns({
         editInitially={optimisticColumns.length === 0}
         newColumnAction={async (formData) => {
           startTransition(async () => {
-            setOptimisticColumns((cols) => [
-              ...cols,
-              {
-                id: Math.random().toString(),
-                name: String(formData.get("name")),
-                boardId,
-                items: [],
-                order: cols.length + 1,
-              },
-            ]);
+            setOptimisticColumns({
+              type: "create-column",
+              boardId,
+              name: String(formData.get("name")),
+            });
             await newColumnAction(formData);
           });
         }}
@@ -468,4 +429,111 @@ function Card({
       </div>
     </li>
   );
+}
+
+type CreateColumnAction = {
+  type: "create-column";
+  boardId: number;
+  name: string;
+};
+
+type RenameColumnAction = {
+  type: "rename-column";
+  columnId: string;
+  name: string;
+};
+
+type CreateItemAction = {
+  type: "create-item";
+  boardId: number;
+  columnId: string;
+  title: string;
+};
+
+type MoveItemAction = {
+  type: "move-item";
+  newItem: ItemMutation;
+};
+
+type ColumnAction =
+  | CreateColumnAction
+  | RenameColumnAction
+  | CreateItemAction
+  | MoveItemAction;
+
+function reduceColumns(
+  columns: ColumnWithItems[],
+  action: ColumnAction
+): ColumnWithItems[] {
+  switch (action.type) {
+    case "create-column": {
+      return [
+        ...columns,
+        {
+          id: Math.random().toString(),
+          name: action.name,
+          boardId: action.boardId,
+          items: [],
+          order: columns.length + 1,
+        },
+      ];
+    }
+
+    case "rename-column": {
+      return columns.map((column) =>
+        column.id === action.columnId
+          ? { ...column, name: action.name }
+          : column
+      );
+    }
+
+    case "create-item": {
+      return columns.map((column) =>
+        column.id === action.columnId
+          ? {
+              ...column,
+              items: [
+                ...column.items,
+                {
+                  id: Math.random().toString(),
+                  title: action.title,
+                  order: (column.items.at(-1)?.order ?? 0) + 1,
+                  content: null,
+                  columnId: action.columnId,
+                  boardId: action.boardId,
+                },
+              ],
+            }
+          : column
+      );
+    }
+
+    case "move-item": {
+      const { newItem } = action;
+      const previousColumn = columns.find((c) => c.id === newItem.columnId);
+      const newColumn = columns.find((c) => c.id === newItem.columnId);
+      invariant(newColumn, "missing new column");
+      invariant(previousColumn, "missing previous column");
+
+      return columns.map((column) =>
+        column.id === previousColumn?.id
+          ? {
+              ...column,
+              items: column.items.map((item) =>
+                item.id === newItem.id
+                  ? {
+                      ...item,
+                      ...newItem,
+                      id: newItem.id ?? Math.random().toString(),
+                    }
+                  : item
+              ),
+            }
+          : column
+      );
+    }
+
+    default:
+      return columns;
+  }
 }
