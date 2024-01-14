@@ -30,6 +30,7 @@ type ColumnsProps = {
   renameColumnAction: (data: FormData) => Promise<void>;
   columns: ColumnWithItems[];
   newColumnAction: (data: FormData) => Promise<void>;
+  createCardAction: (data: FormData) => Promise<void>;
   boardId: number;
 };
 
@@ -38,9 +39,12 @@ export function Columns({
   moveItemAction,
   renameColumnAction,
   newColumnAction,
+  createCardAction,
   boardId,
 }: ColumnsProps) {
   const [optimisticColumns, setOptimisticColumns] = useOptimistic(columns);
+  console.log("optimistic", optimisticColumns[1].items);
+  console.log("server", columns[1].items);
   const [, startTransition] = useTransition();
   return (
     <>
@@ -72,6 +76,31 @@ export function Columns({
               await moveItemAction(item);
             });
           }}
+          createCardAction={async (formData) => {
+            startTransition(async () => {
+              setOptimisticColumns(
+                optimisticColumns.map((c) =>
+                  c.id === col.id
+                    ? {
+                        ...c,
+                        items: [
+                          ...c.items,
+                          {
+                            id: Math.random().toString(),
+                            title: String(formData.get("title")),
+                            order: (c.items.at(-1)?.order ?? 0) + 1,
+                            content: null,
+                            columnId: c.id,
+                            boardId,
+                          },
+                        ],
+                      }
+                    : c
+                )
+              );
+              await createCardAction(formData);
+            });
+          }}
           renameColumnAction={async (formData) => {
             setOptimisticColumns(
               optimisticColumns.map((c) =>
@@ -87,9 +116,7 @@ export function Columns({
 
       <NewColumn
         editInitially={optimisticColumns.length === 0}
-        onNewColumn={async (formData) => {
-          await newColumnAction(formData);
-        }}
+        onNewColumn={newColumnAction}
       />
     </>
   );
@@ -101,6 +128,7 @@ type ColumnProps = {
   name: string;
   id: string;
   items: Item[];
+  createCardAction: (data: FormData) => Promise<void>;
 };
 
 function Column({
@@ -109,8 +137,17 @@ function Column({
   items,
   onAddInitialItem,
   renameColumnAction,
+  createCardAction,
 }: ColumnProps) {
   const [acceptDrop, setAcceptDrop] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  function scrollList() {
+    invariant(listRef.current);
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }
+
+  const sortedItems = items.slice().sort((a, b) => a.order - b.order);
 
   return (
     <div
@@ -161,6 +198,99 @@ function Column({
           <input type="hidden" name="id" value={id} />
         </EditableText>
       </div>
+      <ul ref={listRef} className="flex-grow overflow-auto">
+        {sortedItems.map((item, index) => (
+          <Card
+            key={item.id}
+            id={item.id}
+            columnId={id}
+            content={item.content}
+            title={item.title}
+            order={item.order}
+            previousOrder={items[index - 1] ? items[index - 1].order : 0}
+            nextOrder={
+              items[index + 1] ? items[index + 1].order : item.order + 1
+            }
+          />
+        ))}
+      </ul>
+      <NewCard
+        onAddCard={scrollList}
+        nextOrder={sortedItems.length === 0 ? 1 : sortedItems.at(-1)!.order + 1}
+        columnId={id}
+        createCardAction={createCardAction}
+      />
+    </div>
+  );
+}
+
+type NewCardsProps = {
+  columnId: string;
+  nextOrder: number;
+  onAddCard: () => void;
+  createCardAction: (data: FormData) => Promise<void>;
+};
+
+function NewCard({
+  onAddCard,
+  createCardAction,
+  nextOrder,
+  columnId,
+}: NewCardsProps) {
+  const [edit, setEdit] = useState(false);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  return edit ? (
+    <form
+      className="px-2 py-1 border-t-2 border-b-2 border-transparent"
+      action={async (formData) => {
+        invariant(titleRef.current, "missing textarea ref");
+        // TODO: Technically we're actually clearing too soon here
+        titleRef.current.value = "";
+        await createCardAction(formData);
+      }}
+    >
+      <input type="hidden" name="columnId" value={columnId} />
+      <input type="hidden" name="order" value={nextOrder} />
+      <textarea
+        ref={titleRef}
+        autoFocus
+        required
+        name="title"
+        placeholder="Enter a title for this card"
+        className="outline-none shadow text-sm rounded-lg w-full py-1 px-2 resize-none placeholder:text-sm placeholder:text-slate-500 h-14"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          } else if (event.key === "Escape") {
+            setEdit(false);
+          }
+        }}
+        onChange={(event) => {
+          let el = event.currentTarget;
+          el.style.height = el.scrollHeight + "px";
+        }}
+      />
+      <div className="flex justify-between">
+        <SaveButton>Save Card</SaveButton>
+        <CancelButton onClick={() => setEdit(false)}>Cancel</CancelButton>
+      </div>
+    </form>
+  ) : (
+    <div className="p-2">
+      <button
+        type="button"
+        onClick={() => {
+          flushSync(() => {
+            setEdit(true);
+          });
+          onAddCard();
+        }}
+        className="flex items-center gap-2 rounded-lg text-left w-full p-2 font-medium text-slate-500 hover:bg-slate-200 focus:bg-slate-200"
+      >
+        <Icon name="plus" /> Add a card
+      </button>
     </div>
   );
 }
@@ -221,5 +351,39 @@ export function NewColumn({ onNewColumn, editInitially }: NewColumnProps) {
     >
       <Icon name="plus" size="xl" />
     </button>
+  );
+}
+
+type CardProps = {
+  title: string;
+  content: string | null;
+  id: string;
+  columnId: string;
+  order: number;
+  nextOrder: number;
+  previousOrder: number;
+};
+
+function Card({ title, content }: CardProps) {
+  const [acceptDrop, setAcceptDrop] = useState<"none" | "top" | "bottom">(
+    "none"
+  );
+  return (
+    <li className="border-t-2 border-b-2 -mb-[2px] last:mb-0 cursor-grab active:cursor-grabbing px-2 py-1">
+      <div
+        draggable
+        className={clsx(
+          "bg-white shadow shadow-slate-300 border-slate-300 text-sm rounded-lg w-full py-1 px-2 relative",
+          {
+            "border-t-brand-red border-b-transparent": acceptDrop === "top",
+            "border-b-brand-red border-t-transparent": acceptDrop === "bottom",
+            "border-t-transparent border-b-transparent": acceptDrop === "none",
+          }
+        )}
+      >
+        <h3>{title}</h3>
+        <div className="mt-2">{content || <>&nbsp;</>}</div>
+      </div>
+    </li>
   );
 }

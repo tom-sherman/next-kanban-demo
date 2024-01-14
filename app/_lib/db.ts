@@ -147,7 +147,7 @@ export async function updateBoardName(
 }
 
 export type ItemMutation = {
-  id: string;
+  id?: string;
   columnId: string;
   order: number;
   title: string;
@@ -160,7 +160,7 @@ export async function upsertItem(
 ): Promise<void> {
   await prisma.item.upsert({
     where: {
-      id: mutation.id,
+      id: mutation.id ?? crypto.randomBytes(16).toString("hex"),
       Board: {
         accountId,
       },

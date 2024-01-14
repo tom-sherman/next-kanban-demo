@@ -10,7 +10,6 @@ import {
 } from "@/app/_lib/db";
 import { notFound, redirect } from "next/navigation";
 import { BoardWrapper } from "./_components/board-wrapper";
-import { EditableText } from "./_components/editable-text";
 import invariant from "tiny-invariant";
 import { unstable_noStore as noStore, revalidatePath } from "next/cache";
 import { Columns } from "./_components/column";
@@ -59,6 +58,29 @@ export default async function Board({ params }: { params: { id: string } }) {
     revalidatePath(boardPath);
   }
 
+  async function createCardAction(formData: FormData) {
+    "use server";
+
+    const columnId = String(formData.get("columnId") || "");
+    invariant(columnId, "Missing columnId");
+    const title = String(formData.get("title") || "");
+    invariant(columnId, "Missing title");
+    const order = Number(formData.get("order") || 0);
+    invariant(order, "Missing order");
+
+    await upsertItem(
+      {
+        columnId,
+        order,
+        title,
+      },
+      userId!,
+      board!.id
+    );
+
+    revalidatePath(boardPath);
+  }
+
   let itemsByColumnId = getItemsByColumnId(board.items);
   const columns = board.columns.map((col) => {
     return {
@@ -83,6 +105,7 @@ export default async function Board({ params }: { params: { id: string } }) {
           renameColumnAction={renameColumnAction}
           newColumnAction={newColumnAction}
           boardId={board.id}
+          createCardAction={createCardAction}
         />
 
         {/* trolling you to add some extra margin to the right of the container with a whole dang div */}
