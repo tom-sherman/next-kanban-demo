@@ -28,9 +28,9 @@ type ColumnWithItems = Column & {
 type ColumnsProps = {
   moveItemAction: (item: ItemMutation) => Promise<void>;
   renameColumnAction: (data: FormData) => Promise<void>;
-  columns: ColumnWithItems[];
   newColumnAction: (data: FormData) => Promise<void>;
   createCardAction: (data: FormData) => Promise<void>;
+  columns: ColumnWithItems[];
   boardId: number;
 };
 
@@ -43,9 +43,38 @@ export function Columns({
   boardId,
 }: ColumnsProps) {
   const [optimisticColumns, setOptimisticColumns] = useOptimistic(columns);
-  console.log("optimistic", optimisticColumns[1].items);
-  console.log("server", columns[1].items);
   const [, startTransition] = useTransition();
+  console.log(optimisticColumns[0]?.items.map((i) => i.order));
+
+  function moveItem(newItem: ItemMutation) {
+    startTransition(async () => {
+      setOptimisticColumns((columns) => {
+        const previousColumn = columns.find((c) => c.id === newItem.columnId);
+        const newColumn = columns.find((c) => c.id === newItem.columnId);
+        invariant(newColumn, "missing new column");
+        invariant(previousColumn, "missing previous column");
+
+        return columns.map((column) =>
+          column.id === previousColumn?.id
+            ? {
+                ...column,
+                items: column.items.map((item) =>
+                  item.id === newItem.id
+                    ? {
+                        ...item,
+                        ...newItem,
+                        id: newItem.id ?? Math.random().toString(),
+                      }
+                    : item
+                ),
+              }
+            : column
+        );
+      });
+      await moveItemAction(newItem);
+    });
+  }
+
   return (
     <>
       {optimisticColumns.map((col) => (
@@ -54,28 +83,9 @@ export function Columns({
           name={col.name}
           id={col.id}
           items={col.items}
-          onAddInitialItem={(item) => {
-            startTransition(async () => {
-              setOptimisticColumns(
-                optimisticColumns.map((c) =>
-                  c.id === col.id
-                    ? {
-                        ...c,
-                        items: [
-                          {
-                            ...item,
-                            id: Math.random().toString(),
-                            content: "",
-                            boardId,
-                          },
-                        ],
-                      }
-                    : c
-                )
-              );
-              await moveItemAction(item);
-            });
-          }}
+          // TODO: onMoveCard & onAddInitialItem & createCardAction could probably be a single prop
+          onMoveCard={(item) => moveItem(item)}
+          onAddInitialItem={(item) => moveItem(item)}
           createCardAction={async (formData) => {
             startTransition(async () => {
               setOptimisticColumns((cols) =>
@@ -124,6 +134,7 @@ export function Columns({
 
 type ColumnProps = {
   onAddInitialItem: (item: ItemMutation) => void;
+  onMoveCard: (item: ItemMutation) => void;
   renameColumnAction: (data: FormData) => Promise<void>;
   name: string;
   id: string;
@@ -136,6 +147,7 @@ function Column({
   id,
   items,
   onAddInitialItem,
+  onMoveCard,
   renameColumnAction,
   createCardAction,
 }: ColumnProps) {
@@ -201,16 +213,15 @@ function Column({
       <ul ref={listRef} className="flex-grow overflow-auto">
         {sortedItems.map((item, index) => (
           <Card
+            onMoveCard={onMoveCard}
             key={item.id}
             id={item.id}
             columnId={id}
             content={item.content}
             title={item.title}
             order={item.order}
-            previousOrder={items[index - 1] ? items[index - 1].order : 0}
-            nextOrder={
-              items[index + 1] ? items[index + 1].order : item.order + 1
-            }
+            previousOrder={items[index - 1]?.order || 0}
+            nextOrder={items[index + 1]?.order || item.order + 1}
           />
         ))}
       </ul>
@@ -362,24 +373,81 @@ type CardProps = {
   order: number;
   nextOrder: number;
   previousOrder: number;
+  onMoveCard: (item: ItemMutation) => void;
 };
 
-function Card({ title, content }: CardProps) {
+function Card({
+  title,
+  content,
+  previousOrder,
+  nextOrder,
+  order,
+  columnId,
+  id,
+  onMoveCard,
+}: CardProps) {
   const [acceptDrop, setAcceptDrop] = useState<"none" | "top" | "bottom">(
     "none"
   );
   return (
-    <li className="border-t-2 border-b-2 -mb-[2px] last:mb-0 cursor-grab active:cursor-grabbing px-2 py-1">
+    <li
+      className={clsx(
+        "border-t-2 border-b-2 -mb-[2px] last:mb-0 cursor-grab active:cursor-grabbing px-2 py-1",
+        {
+          "border-t-brand-red border-b-transparent": acceptDrop === "top",
+          "border-b-brand-red border-t-transparent": acceptDrop === "bottom",
+          "border-t-transparent border-b-transparent": acceptDrop === "none",
+        }
+      )}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes(CONTENT_TYPES.card)) {
+          event.preventDefault();
+          event.stopPropagation();
+          let rect = event.currentTarget.getBoundingClientRect();
+          let midpoint = (rect.top + rect.bottom) / 2;
+          setAcceptDrop(event.clientY <= midpoint ? "top" : "bottom");
+        }
+      }}
+      onDragLeave={() => {
+        setAcceptDrop("none");
+      }}
+      onDrop={(event) => {
+        event.stopPropagation();
+
+        let transfer = JSON.parse(
+          event.dataTransfer.getData(CONTENT_TYPES.card)
+        );
+        invariant(transfer.id, "missing cardId");
+        invariant(transfer.title, "missing title");
+
+        let droppedOrder = acceptDrop === "top" ? previousOrder : nextOrder;
+        let moveOrder = (droppedOrder + order) / 2;
+
+        let mutation: ItemMutation = {
+          order: moveOrder,
+          columnId: columnId,
+          id: transfer.id,
+          title: transfer.title,
+        };
+
+        invariant(mutation.id, "missing mutation.id");
+        invariant(mutation.title, "missing mutation.title");
+
+        // TODO: Should this be in a transition?
+        onMoveCard(mutation);
+        setAcceptDrop("none");
+      }}
+    >
       <div
         draggable
-        className={clsx(
-          "bg-white shadow shadow-slate-300 border-slate-300 text-sm rounded-lg w-full py-1 px-2 relative",
-          {
-            "border-t-brand-red border-b-transparent": acceptDrop === "top",
-            "border-b-brand-red border-t-transparent": acceptDrop === "bottom",
-            "border-t-transparent border-b-transparent": acceptDrop === "none",
-          }
-        )}
+        className="bg-white shadow shadow-slate-300 border-slate-300 text-sm rounded-lg w-full py-1 px-2 relative"
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData(
+            CONTENT_TYPES.card,
+            JSON.stringify({ id, title })
+          );
+        }}
       >
         <h3>{title}</h3>
         <div className="mt-2">{content || <>&nbsp;</>}</div>
