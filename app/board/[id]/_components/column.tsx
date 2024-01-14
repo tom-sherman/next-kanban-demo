@@ -126,7 +126,21 @@ export function Columns({
 
       <NewColumn
         editInitially={optimisticColumns.length === 0}
-        onNewColumn={newColumnAction}
+        newColumnAction={async (formData) => {
+          startTransition(async () => {
+            setOptimisticColumns((cols) => [
+              ...cols,
+              {
+                id: Math.random().toString(),
+                name: String(formData.get("name")),
+                boardId,
+                items: [],
+                order: cols.length + 1,
+              },
+            ]);
+            await newColumnAction(formData);
+          });
+        }}
       />
     </>
   );
@@ -308,10 +322,10 @@ function NewCard({
 
 type NewColumnProps = {
   editInitially: boolean;
-  onNewColumn: (data: FormData) => Promise<void>;
+  newColumnAction: (data: FormData) => Promise<void>;
 };
 
-export function NewColumn({ onNewColumn, editInitially }: NewColumnProps) {
+export function NewColumn({ newColumnAction, editInitially }: NewColumnProps) {
   const [editing, setEditing] = useState(editInitially);
   const boardScrollerRef = useContext(BoardContainerRefContext);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -325,7 +339,7 @@ export function NewColumn({ onNewColumn, editInitially }: NewColumnProps) {
     <form
       className="p-2 flex-shrink-0 flex flex-col gap-5 overflow-hidden max-h-full w-80 border rounded-xl shadow bg-slate-100"
       action={async (formData) => {
-        await onNewColumn(formData);
+        await newColumnAction(formData);
         scrollRight();
         invariant(inputRef.current, "missing input ref");
         inputRef.current.value = "";
