@@ -78,8 +78,8 @@ export function Columns({
           }}
           createCardAction={async (formData) => {
             startTransition(async () => {
-              setOptimisticColumns(
-                optimisticColumns.map((c) =>
+              setOptimisticColumns((cols) =>
+                cols.map((c) =>
                   c.id === col.id
                     ? {
                         ...c,
